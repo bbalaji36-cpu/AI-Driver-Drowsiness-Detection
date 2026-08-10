@@ -1,0 +1,7 @@
+opencv-python
+numpy
+flask
+
+# simpleaudio is only needed on Mac/Linux (Windows uses the built-in winsound module).
+# If you are on Mac/Linux, uncomment the line below:
+# simpleaudio
