@@ -1,7 +1,4 @@
-opencv-python-headless
-numpy
-flask
-gunicorn
-# simpleaudio is only needed on Mac/Linux (Windows uses the built-in winsound module).
-# If you are on Mac/Linux, uncomment the line below:
-# simpleaudio
+opencv-python-headless==4.10.0.84
+numpy==1.26.4
+flask==3.0.3
+gunicorn==22.0.0
