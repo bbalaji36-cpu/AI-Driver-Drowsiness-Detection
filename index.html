@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AI Drowsiness Detection</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background: #f2f2f2;
+            padding: 30px;
+        }
+
+        h1 {
+            margin-bottom: 20px;
+        }
+
+        video {
+            width: 640px;
+            max-width: 90%;
+            border-radius: 10px;
+            border: 3px solid #333;
+        }
+
+        button {
+            padding: 12px 25px;
+            margin: 10px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        #result {
+            font-size: 28px;
+            font-weight: bold;
+            margin-top: 20px;
+        }
+
+        #message {
+            font-size: 18px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>AI Driver Drowsiness Detection</h1>
+
+    <button onclick="startCamera()">Allow Camera</button>
+    <button onclick="stopCamera()">Stop Camera</button>
+
+    <br><br>
+
+    <video id="camera" autoplay playsinline></video>
+
+    <div id="result">Camera not started</div>
+    <div id="message"></div>
+
+    <script>
+
+        let stream = null;
+        let detecting = false;
+
+        async function startCamera() {
+
+            try {
+
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: true,
+                    audio: false
+                });
+
+                const video = document.getElementById("camera");
+
+                video.srcObject = stream;
+
+                detecting = true;
+
+                document.getElementById("result").innerText =
+                    "Camera started";
+
+                sendFrames();
+
+            } catch (error) {
+
+                console.error(error);
+
+                document.getElementById("result").innerText =
+                    "Camera permission denied";
+
+            }
+        }
+
+
+        function stopCamera() {
+
+            detecting = false;
+
+            if (stream) {
+
+                stream.getTracks().forEach(function(track) {
+                    track.stop();
+                });
+
+                stream = null;
+            }
+
+            document.getElementById("camera").srcObject = null;
+
+            document.getElementById("result").innerText =
+                "Camera stopped";
+
+            document.getElementById("message").innerText = "";
+        }
+
+
+        async function sendFrames() {
+
+            if (!detecting) {
+                return;
+            }
+
+            const video = document.getElementById("camera");
+
+            if (video.readyState < 2) {
+
+                setTimeout(sendFrames, 500);
+
+                return;
+            }
+
+            const canvas = document.createElement("canvas");
+
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+
+            const context = canvas.getContext("2d");
+
+            context.drawImage(
+                video,
+                0,
+                0,
+                canvas.width,
+                canvas.height
+            );
+
+            canvas.toBlob(async function(blob) {
+
+                if (!blob) {
+                    setTimeout(sendFrames, 500);
+                    return;
+                }
+
+                const formData = new FormData();
+
+                formData.append("frame", blob, "frame.jpg");
+
+                try {
+
+                    const response = await fetch("/detect", {
+                        method: "POST",
+                        body: formData
+                    });
+
+                    const data = await response.json();
+
+                    updateResult(data);
+
+                } catch (error) {
+
+                    console.error("Detection error:", error);
+
+                }
+
+                setTimeout(sendFrames, 500);
+
+            }, "image/jpeg", 0.7);
+        }
+
+
+        function updateResult(data) {
+
+            const result = document.getElementById("result");
+            const message = document.getElementById("message");
+
+            if (data.status === "AWAKE") {
+
+                result.innerText = "🟢 AWAKE";
+                message.innerText = data.message;
+
+            }
+
+            else if (data.status === "DROWSY") {
+
+                result.innerText = "🔴 DROWSY";
+                message.innerText = data.message;
+
+            }
+
+            else if (data.status === "NO FACE") {
+
+                result.innerText = "⚠️ NO FACE DETECTED";
+                message.innerText = data.message;
+
+            }
+
+            else {
+
+                result.innerText = data.status;
+                message.innerText = data.message || "";
+
+            }
+        }
+
+    </script>
+
+</body>
+</html>
