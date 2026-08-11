@@ -1,13 +1,16 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <title>AI Driver Drowsiness Detection</title>
 
     <style>
         body {
             font-family: Arial, sans-serif;
             text-align: center;
-            background: #f2f2f2;
+            background: #f4f6f8;
             margin: 0;
             padding: 30px;
         }
@@ -16,11 +19,23 @@
             margin-bottom: 10px;
         }
 
-        video {
+        #camera {
             width: 640px;
-            max-width: 90%;
-            border-radius: 10px;
+            max-width: 95%;
+            border-radius: 15px;
+            border: 4px solid #333;
             background: black;
+        }
+
+        #status {
+            margin-top: 20px;
+            font-size: 30px;
+            font-weight: bold;
+        }
+
+        #message {
+            margin-top: 10px;
+            font-size: 18px;
         }
 
         button {
@@ -28,12 +43,8 @@
             padding: 12px 25px;
             font-size: 18px;
             cursor: pointer;
-        }
-
-        #status {
-            font-size: 22px;
-            font-weight: bold;
-            margin-top: 20px;
+            border-radius: 8px;
+            border: none;
         }
     </style>
 </head>
@@ -46,39 +57,177 @@
 
     <video id="camera" autoplay playsinline></video>
 
-    <br>
+    <canvas id="canvas" style="display:none;"></canvas>
 
-    <button onclick="startCamera()">Allow Camera</button>
+    <div id="status">Starting camera...</div>
 
-    <p id="status">Camera not started</p>
+    <div id="message"></div>
 
-    <script>
+    <button onclick="startCamera()">Start Camera</button>
 
-        async function startCamera() {
+
+<script>
+
+const video = document.getElementById("camera");
+const canvas = document.getElementById("canvas");
+const statusText = document.getElementById("status");
+const messageText = document.getElementById("message");
+
+let stream = null;
+let detecting = false;
+
+
+// Start laptop camera
+async function startCamera() {
+
+    try {
+
+        stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false
+        });
+
+        video.srcObject = stream;
+
+        statusText.innerText = "Camera Active";
+        messageText.innerText = "Checking for drowsiness...";
+
+        if (!detecting) {
+
+            detecting = true;
+
+            // Start sending frames
+            detectFrame();
+        }
+
+    } catch (error) {
+
+        console.error("Camera error:", error);
+
+        statusText.innerText = "Camera Access Failed";
+
+        messageText.innerText =
+            "Please allow camera permission and refresh the page.";
+    }
+}
+
+
+// Capture camera frame and send to Flask
+async function detectFrame() {
+
+    if (!detecting) {
+        return;
+    }
+
+    if (video.readyState >= 2) {
+
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+
+        const context = canvas.getContext("2d");
+
+        context.drawImage(
+            video,
+            0,
+            0,
+            canvas.width,
+            canvas.height
+        );
+
+        canvas.toBlob(async function(blob) {
+
+            if (!blob) {
+                return;
+            }
+
+            const formData = new FormData();
+
+            formData.append(
+                "frame",
+                blob,
+                "camera.jpg"
+            );
+
 
             try {
 
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: true,
-                    audio: false
+                const response = await fetch("/detect", {
+                    method: "POST",
+                    body: formData
                 });
 
-                document.getElementById("camera").srcObject = stream;
 
-                document.getElementById("status").innerText =
-                    "Camera started successfully";
+                const result = await response.json();
+
+                console.log("Python response:", result);
+
+
+                if (result.status === "DROWSY") {
+
+                    statusText.innerText = "⚠️ DROWSY";
+
+                    messageText.innerText =
+                        "Driver appears to be drowsy!";
+
+                }
+
+                else if (result.status === "AWAKE") {
+
+                    statusText.innerText = "✅ AWAKE";
+
+                    messageText.innerText =
+                        "Driver is alert.";
+
+                }
+
+                else if (result.status === "ERROR") {
+
+                    statusText.innerText = "Detection Error";
+
+                    messageText.innerText =
+                        result.message || "Unknown error.";
+
+                }
+
+                else {
+
+                    statusText.innerText =
+                        result.status || "Checking...";
+
+                }
+
 
             } catch (error) {
 
-                console.error(error);
+                console.error(
+                    "Detection request failed:",
+                    error
+                );
 
-                document.getElementById("status").innerText =
-                    "Camera permission denied or camera unavailable";
+                statusText.innerText =
+                    "Connection Error";
 
+                messageText.innerText =
+                    "Unable to contact the AI detector.";
             }
-        }
 
-    </script>
+        }, "image/jpeg", 0.7);
+    }
+
+
+    // Send another frame after 500 ms
+    setTimeout(detectFrame, 500);
+}
+
+
+// Automatically start camera when page opens
+window.addEventListener("load", function() {
+
+    startCamera();
+
+});
+
+</script>
 
 </body>
 </html>
