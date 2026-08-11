@@ -1,233 +1,755 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
+
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
 
     <title>AI Driver Drowsiness Detection</title>
 
+
     <style>
+
         body {
+
             font-family: Arial, sans-serif;
+
             text-align: center;
+
             background: #f4f6f8;
+
             margin: 0;
+
             padding: 30px;
+
         }
+
 
         h1 {
+
             margin-bottom: 10px;
+
         }
+
 
         #camera {
+
             width: 640px;
+
             max-width: 95%;
+
             border-radius: 15px;
+
             border: 4px solid #333;
+
             background: black;
+
         }
+
 
         #status {
+
             margin-top: 20px;
-            font-size: 30px;
+
+            font-size: 32px;
+
             font-weight: bold;
+
         }
+
 
         #message {
+
             margin-top: 10px;
+
             font-size: 18px;
+
         }
 
+
         button {
+
             margin-top: 20px;
+
             padding: 12px 25px;
+
             font-size: 18px;
+
             cursor: pointer;
+
             border-radius: 8px;
+
             border: none;
+
         }
+
+
+        /* RED WARNING CIRCLE */
+
+        #alertDot {
+
+            position: fixed;
+
+            top: 25px;
+
+            right: 25px;
+
+            width: 35px;
+
+            height: 35px;
+
+            background: red;
+
+            border-radius: 50%;
+
+            display: none;
+
+            box-shadow: 0 0 15px red;
+
+            animation: blink 0.7s infinite;
+
+            z-index: 9999;
+
+        }
+
+
+        @keyframes blink {
+
+            0% {
+
+                opacity: 1;
+
+            }
+
+            50% {
+
+                opacity: 0.2;
+
+            }
+
+            100% {
+
+                opacity: 1;
+
+            }
+
+        }
+
+
+        /* DROWSY STATUS */
+
+        .drowsy {
+
+            color: red;
+
+        }
+
+
+        /* AWAKE STATUS */
+
+        .awake {
+
+            color: green;
+
+        }
+
     </style>
+
 </head>
+
 
 <body>
 
+
     <h1>AI Driver Drowsiness Detection</h1>
 
-    <p>Allow camera access to start drowsiness detection.</p>
 
-    <video id="camera" autoplay playsinline></video>
+    <p>
 
-    <canvas id="canvas" style="display:none;"></canvas>
+        Allow camera access to start drowsiness detection.
 
-    <div id="status">Starting camera...</div>
+    </p>
+
+
+    <!-- CAMERA -->
+
+    <video id="camera"
+           autoplay
+           playsinline>
+    </video>
+
+
+    <!-- HIDDEN CANVAS -->
+
+    <canvas id="canvas"
+            style="display:none;">
+    </canvas>
+
+
+    <!-- STATUS -->
+
+    <div id="status">
+
+        Starting camera...
+
+    </div>
+
 
     <div id="message"></div>
 
-    <button onclick="startCamera()">Start Camera</button>
+
+    <!-- START BUTTON -->
+
+    <button onclick="startCamera()">
+
+        Start Camera & Detection
+
+    </button>
+
+
+    <!-- RED WARNING DOT -->
+
+    <div id="alertDot"></div>
 
 
 <script>
 
-const video = document.getElementById("camera");
-const canvas = document.getElementById("canvas");
-const statusText = document.getElementById("status");
-const messageText = document.getElementById("message");
+
+const video =
+    document.getElementById("camera");
+
+
+const canvas =
+    document.getElementById("canvas");
+
+
+const statusText =
+    document.getElementById("status");
+
+
+const messageText =
+    document.getElementById("message");
+
+
+const alertDot =
+    document.getElementById("alertDot");
+
 
 let stream = null;
+
 let detecting = false;
 
 
-// Start laptop camera
-async function startCamera() {
+/*
+    Browser audio
+*/
+
+let audioContext = null;
+
+let alarmInterval = null;
+
+
+
+/*
+    Start browser audio
+*/
+
+function enableAudio() {
 
     try {
 
-        stream = await navigator.mediaDevices.getUserMedia({
-            video: true,
-            audio: false
-        });
+        if (!audioContext) {
 
-        video.srcObject = stream;
+            audioContext =
+                new (window.AudioContext ||
+                     window.webkitAudioContext)();
 
-        statusText.innerText = "Camera Active";
-        messageText.innerText = "Checking for drowsiness...";
+        }
+
+
+        if (audioContext.state === "suspended") {
+
+            audioContext.resume();
+
+        }
+
+    }
+
+    catch (error) {
+
+        console.log(
+            "Audio initialization error:",
+            error
+        );
+
+    }
+
+}
+
+
+
+/*
+    Play one alarm beep
+*/
+
+function playBeep() {
+
+    try {
+
+        if (!audioContext) {
+
+            return;
+
+        }
+
+
+        const oscillator =
+            audioContext.createOscillator();
+
+
+        const gain =
+            audioContext.createGain();
+
+
+        oscillator.type = "square";
+
+
+        oscillator.frequency.setValueAtTime(
+            900,
+            audioContext.currentTime
+        );
+
+
+        gain.gain.setValueAtTime(
+            0.25,
+            audioContext.currentTime
+        );
+
+
+        oscillator.connect(gain);
+
+        gain.connect(audioContext.destination);
+
+
+        oscillator.start();
+
+
+        oscillator.stop(
+            audioContext.currentTime + 0.25
+        );
+
+    }
+
+    catch (error) {
+
+        console.log(
+            "Alarm error:",
+            error
+        );
+
+    }
+
+}
+
+
+
+/*
+    Start alarm
+*/
+
+function startAlarm() {
+
+    enableAudio();
+
+
+    if (alarmInterval !== null) {
+
+        return;
+
+    }
+
+
+    playBeep();
+
+
+    alarmInterval =
+        setInterval(
+            playBeep,
+            700
+        );
+
+}
+
+
+
+/*
+    Stop alarm
+*/
+
+function stopAlarm() {
+
+    if (alarmInterval !== null) {
+
+        clearInterval(alarmInterval);
+
+        alarmInterval = null;
+
+    }
+
+}
+
+
+
+/*
+    Start laptop camera
+*/
+
+async function startCamera() {
+
+
+    /*
+        User clicked button.
+        This allows browser audio.
+    */
+
+    enableAudio();
+
+
+    try {
+
+
+        if (!stream) {
+
+
+            stream =
+                await navigator.mediaDevices
+                .getUserMedia({
+
+                    video: true,
+
+                    audio: false
+
+                });
+
+
+            video.srcObject =
+                stream;
+
+        }
+
+
+        statusText.innerText =
+            "Camera Active";
+
+
+        messageText.innerText =
+            "Checking for drowsiness...";
+
 
         if (!detecting) {
 
             detecting = true;
 
-            // Start sending frames
             detectFrame();
+
         }
 
-    } catch (error) {
 
-        console.error("Camera error:", error);
+    }
 
-        statusText.innerText = "Camera Access Failed";
+    catch (error) {
+
+
+        console.error(
+            "Camera error:",
+            error
+        );
+
+
+        statusText.innerText =
+            "Camera Access Failed";
+
 
         messageText.innerText =
-            "Please allow camera permission and refresh the page.";
+            "Please allow camera permission.";
+
     }
+
 }
 
 
-// Capture camera frame and send to Flask
+
+/*
+    Capture camera frame
+    and send it to Flask
+*/
+
 async function detectFrame() {
 
+
     if (!detecting) {
+
         return;
+
     }
+
 
     if (video.readyState >= 2) {
 
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
 
-        const context = canvas.getContext("2d");
+        canvas.width =
+            video.videoWidth;
+
+
+        canvas.height =
+            video.videoHeight;
+
+
+        const context =
+            canvas.getContext("2d");
+
 
         context.drawImage(
+
             video,
+
             0,
+
             0,
+
             canvas.width,
+
             canvas.height
+
         );
 
-        canvas.toBlob(async function(blob) {
 
-            if (!blob) {
-                return;
-            }
+        canvas.toBlob(
 
-            const formData = new FormData();
-
-            formData.append(
-                "frame",
-                blob,
-                "camera.jpg"
-            );
+            async function(blob) {
 
 
-            try {
+                if (!blob) {
 
-                const response = await fetch("/detect", {
-                    method: "POST",
-                    body: formData
-                });
-
-
-                const result = await response.json();
-
-                console.log("Python response:", result);
-
-
-                if (result.status === "DROWSY") {
-
-                    statusText.innerText = "⚠️ DROWSY";
-
-                    messageText.innerText =
-                        "Driver appears to be drowsy!";
-
-                }
-
-                else if (result.status === "AWAKE") {
-
-                    statusText.innerText = "✅ AWAKE";
-
-                    messageText.innerText =
-                        "Driver is alert.";
-
-                }
-
-                else if (result.status === "ERROR") {
-
-                    statusText.innerText = "Detection Error";
-
-                    messageText.innerText =
-                        result.message || "Unknown error.";
-
-                }
-
-                else {
-
-                    statusText.innerText =
-                        result.status || "Checking...";
+                    return;
 
                 }
 
 
-            } catch (error) {
+                const formData =
+                    new FormData();
 
-                console.error(
-                    "Detection request failed:",
-                    error
+
+                formData.append(
+
+                    "frame",
+
+                    blob,
+
+                    "camera.jpg"
+
                 );
 
-                statusText.innerText =
-                    "Connection Error";
 
-                messageText.innerText =
-                    "Unable to contact the AI detector.";
-            }
+                try {
 
-        }, "image/jpeg", 0.7);
+
+                    const response =
+                        await fetch(
+
+                            "/detect",
+
+                            {
+
+                                method: "POST",
+
+                                body: formData
+
+                            }
+
+                        );
+
+
+                    const result =
+                        await response.json();
+
+
+                    console.log(
+                        "Python response:",
+                        result
+                    );
+
+
+
+                    /*
+                        DROWSY
+                    */
+
+                    if (
+                        result.status ===
+                        "DROWSY"
+                    ) {
+
+
+                        statusText.innerText =
+                            "⚠️ DROWSY";
+
+
+                        statusText.className =
+                            "drowsy";
+
+
+                        messageText.innerText =
+                            "Driver appears to be drowsy!";
+
+
+                        /*
+                            SHOW RED CIRCLE
+                        */
+
+                        alertDot.style.display =
+                            "block";
+
+
+                        /*
+                            START SOUND
+                        */
+
+                        startAlarm();
+
+                    }
+
+
+
+                    /*
+                        AWAKE
+                    */
+
+                    else if (
+                        result.status ===
+                        "AWAKE"
+                    ) {
+
+
+                        statusText.innerText =
+                            "✅ AWAKE";
+
+
+                        statusText.className =
+                            "awake";
+
+
+                        messageText.innerText =
+                            "Driver is alert.";
+
+
+                        /*
+                            HIDE RED CIRCLE
+                        */
+
+                        alertDot.style.display =
+                            "none";
+
+
+                        /*
+                            STOP SOUND
+                        */
+
+                        stopAlarm();
+
+                    }
+
+
+
+                    /*
+                        ERROR
+                    */
+
+                    else if (
+                        result.status ===
+                        "ERROR"
+                    ) {
+
+
+                        statusText.innerText =
+                            "Detection Error";
+
+
+                        messageText.innerText =
+                            result.message ||
+                            "Unknown error.";
+
+
+                        alertDot.style.display =
+                            "none";
+
+
+                        stopAlarm();
+
+                    }
+
+
+                }
+
+                catch (error) {
+
+
+                    console.error(
+                        "Detection request failed:",
+                        error
+                    );
+
+
+                    statusText.innerText =
+                        "Connection Error";
+
+
+                    messageText.innerText =
+                        "Unable to contact AI detector.";
+
+
+                }
+
+
+            },
+
+            "image/jpeg",
+
+            0.7
+
+        );
+
     }
 
 
-    // Send another frame after 500 ms
-    setTimeout(detectFrame, 500);
+    /*
+        Check another frame
+        every 500 milliseconds
+    */
+
+    setTimeout(
+        detectFrame,
+        500
+    );
+
 }
 
 
-// Automatically start camera when page opens
-window.addEventListener("load", function() {
 
-    startCamera();
+/*
+    Do NOT automatically start
+    the camera.
 
-});
+    User should click the button.
+    This also unlocks browser audio.
+*/
 
 </script>
 
+
 </body>
+
 </html>
